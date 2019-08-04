@@ -180,14 +180,12 @@ void flatten(){
     flipList.add(allData.get(w));
   }
   
-  ArrayList[] foldPointArray = new ArrayList[flipList.size()];
   
   // now draw the horizontal lines,
   for (int rowCount = 0; rowCount < flipList.size(); rowCount++){
     int[][] data = flipList.get(rowCount);
     int prevX = 0;
     int prevY = 1;
-    ArrayList<String> foldPoints = new ArrayList<String>();
     for (int w = 0; w < data.length; w++){
       int x = data[w][0];
       int y = data[w][1];
@@ -199,31 +197,44 @@ void flatten(){
         int yPos = (w + 1) * unit;
         svg.line(xPos, yPos, xPos + unit - (edge * 2), yPos);
 //        println(xPos + "," + yPos + "," + (xPos + unit - (edge * 2)) + "," + yPos);        
-        foldPoints.add(foldPoints.size() + ":" + w);        
       }
       prevX = x;
       prevY = y;
     }
-    foldPointArray[rowCount] = foldPoints;    
   }
   
-  for (int w = 0; w < foldPointArray.length; w++){
-    ArrayList<String> foldPoints = foldPointArray[w];
-    if (foldPoints.size() > 1){//if it's just one, it's just the main fold in the middle
-      if ((foldPoints.size() % 2) == 0){
-        //if it's an even number, something went wrong
-        println("error? even number of folds?");
-      } else {
-        println(w + ":" + foldPoints.size());
-        for (int q = 1; q < foldPoints.size() - 1; q++){
-          println("\t" + foldPoints.get(q));
-        }
+  // now draw the vertical lines, but first we have to asses the relation 
+  // of each column to the one next to it
+  for (int rowCount = 0; rowCount < flipList.size() - 1; rowCount++){
+    int[][] data = flipList.get(rowCount);
+    int[][] next = flipList.get(rowCount + 1);
+    int[] m_data = new int[2];
+      m_data[0] = data[0][0];
+      m_data[1] = data[0][1];
+    int[] n_data = new int[2];
+      n_data[0] = next[0][0];
+      n_data[1] = next[0][1];
+    for (int w = 0; w < data.length; w++){
+      int x = m_data[0] + data[w][0];
+      int y = m_data[1] + data[w][1];
+      int a = n_data[0] + next[w][0];
+      int b = n_data[1] + next[w][1];
+      String p = (m_data[0] + "," + m_data[1] + " " + x + "," + y);
+      String q = (n_data[0] + "," + n_data[1] + " " + a + "," + b);
+      println(rowCount + ":" + w + "\t" + p + "\t" + q);
+      if (!p.equals(q)){
+        println("cut");
+        int xpos = (rowCount + 2) * unit;
+        int ypos = (w + 1) * unit;
+        svg.line(xpos, ypos, xpos, ypos + unit);
       }
-    } else {
-      println("middle fold only at " + w);
+      m_data[0] = x;
+      m_data[1] = y;
+      n_data[0] = a;
+      n_data[1] = b;
     }
   }
-  
+    
   
   svg.endDraw();
   println("completed output");
