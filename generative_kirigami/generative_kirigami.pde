@@ -14,12 +14,15 @@ int mz = 0;
 
 
 void setup(){
-  size(800,800, P3D);  
+  size(500,500, P3D);  
   
-  cam = new PeasyCam(this, 100);
-  cam.setMinimumDistance(50);
-  cam.setMaximumDistance(500);
-  
+  cam = new PeasyCam(this, 300);
+  cam.setMinimumDistance(200);
+  cam.setMaximumDistance(600);
+  cam.lookAt(-50,40,0);
+  cam.rotateY(1.75);
+  cam.rotateX(0.38);
+
   allData.add(generateEdge());
   for (int w = 1; w < numCols - 1; w++){
     allData.add(generate());
@@ -28,17 +31,17 @@ void setup(){
 }
 
 void draw(){
-  background(255);
+  translate(50,-50,-50);
+  background(240);
   
-  stroke(0,80);
+  stroke(0,180);
   
   
   for (int w = 0; w < allData.size(); w++){
     int[][] data = allData.get(w);
     drawRow(w, data);
   }
-
-
+  
 }
 
 void drawRow(int zpos, int[][] data){
@@ -47,9 +50,9 @@ void drawRow(int zpos, int[][] data){
 
   for (int w = 0; w < data.length; w++){
     if ((w % 2) == 0){
-      fill(0,0,200,100);
+      fill(0,0,200,80);
     } else {
-      fill(0,0,80,100);
+      fill(0,0,80,80);
     }
 
     drawTile(data[w][0], data[w][1], zpos);
@@ -161,12 +164,14 @@ void keyTyped() {
 }
 
 void flatten(){
+  println("begin output");
   int edge = 2;
   int nwidth = (numCols + 2) * unit;
   int nheight = (numRows + 2) * unit;
   PGraphics svg = createGraphics(nwidth, nheight, SVG, "output.svg");
   svg.beginDraw();
-  //border
+  
+  //border (maybe this should be optional)
   svg.rect(unit, unit, numCols * unit, numRows * unit);
   
   //just run the data backward, which makes it easier to compare the image and the cut sheet
@@ -175,30 +180,51 @@ void flatten(){
     flipList.add(allData.get(w));
   }
   
+  ArrayList[] foldPointArray = new ArrayList[flipList.size()];
+  
+  // now draw the horizontal lines,
   for (int rowCount = 0; rowCount < flipList.size(); rowCount++){
     int[][] data = flipList.get(rowCount);
     int prevX = 0;
-    int prevY = 0;
-    ArrayList<Integer> foldPoints = new ArrayList<Integer>();
+    int prevY = 1;
+    ArrayList<String> foldPoints = new ArrayList<String>();
     for (int w = 0; w < data.length; w++){
       int x = data[w][0];
       int y = data[w][1];
-      println(prevX + ":" + prevY + "," + x + ":" + y);
+      //println(prevX + ":" + prevY + "," + x + ":" + y);
       if (x == prevX && y == prevY){
         //don't do anything, it doesn't need an X cut
       } else {
         int xPos = ((rowCount + 1) * unit) + edge;
         int yPos = (w + 1) * unit;
         svg.line(xPos, yPos, xPos + unit - (edge * 2), yPos);
-        println(xPos + "," + yPos + "," + (xPos + unit - (edge * 2)) + "," + yPos);        
-        foldPoints.add(w);
+//        println(xPos + "," + yPos + "," + (xPos + unit - (edge * 2)) + "," + yPos);        
+        foldPoints.add(foldPoints.size() + ":" + w);        
       }
       prevX = x;
       prevY = y;
     }
-    
+    foldPointArray[rowCount] = foldPoints;    
+  }
+  
+  for (int w = 0; w < foldPointArray.length; w++){
+    ArrayList<String> foldPoints = foldPointArray[w];
+    if (foldPoints.size() > 1){//if it's just one, it's just the main fold in the middle
+      if ((foldPoints.size() % 2) == 0){
+        //if it's an even number, something went wrong
+        println("error? even number of folds?");
+      } else {
+        println(w + ":" + foldPoints.size());
+        for (int q = 1; q < foldPoints.size() - 1; q++){
+          println("\t" + foldPoints.get(q));
+        }
+      }
+    } else {
+      println("middle fold only at " + w);
+    }
   }
   
   
   svg.endDraw();
+  println("completed output");
 }
