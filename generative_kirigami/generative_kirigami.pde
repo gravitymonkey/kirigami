@@ -3,8 +3,8 @@ import processing.svg.*;
 
 PeasyCam cam;
 
-int unit = 15; // just display size for this
-int numCols = 5; // should be an even number
+int unit = 10; // just display size for this
+int numCols = 8; // should be an even number
 int numRows = 10; //2X numcols, if you want a square
 ArrayList<int[][]> allData = new ArrayList<int[][]>();
 
@@ -12,6 +12,8 @@ int mx = 0;
 int my = 0;
 int mz = 0;
 
+String filename = "output";
+int num_iter = 0;
 
 void setup(){
   size(500,500, P3D);  
@@ -23,11 +25,16 @@ void setup(){
   cam.rotateY(1.75);
   cam.rotateX(0.38);
 
-  allData.add(generateEdge());
-  for (int w = 1; w < numCols - 1; w++){
-    allData.add(generate());
+  float score = 0.0f;
+  while (score < 0.1f){
+    allData.add(generateEdge());
+    for (int w = 1; w < numCols - 1; w++){
+      allData.add(generate());
+    }
+    allData.add(generateEdge());
+    score = flatten(false);
+    print("generate: score " + score);
   }
-  allData.add(generateEdge());
 }
 
 void draw(){
@@ -73,7 +80,7 @@ void drawTile(int tx, int ty, int tz){
 
 int[][] generate(){
   int[][] data = new int[numRows][2];
-  data[0] = new int[]{0,1};
+  data[0] = new int[]{0,1}; //first col is "blank"
   int numX = 0;
   int numY = 0;
   int counter = 1;
@@ -88,6 +95,10 @@ int[][] generate(){
       data[counter] = new int[]{1,0};
       numX++;
     } else {
+      long rx = (long)abs(random(100000000.0f));
+      filename = "" + rx;
+      println("seed " + rx);
+      randomSeed(rx);
       float r = abs(random(1.0f));
       if (r > 0.5f){
         data[counter] = new int[]{0,1};
@@ -99,11 +110,12 @@ int[][] generate(){
     }
     counter++;
   }
-  data[numRows - 1] = new int[]{1,0};
+  data[numRows - 1] = new int[]{1,0}; // last col is "blank"
   
   if (qualityCheck(data) == null){
     return generate();
   } else {
+    num_iter++;
     return data;
   }
     
@@ -116,19 +128,20 @@ int[][] qualityCheck(int[][] data){
     int xpos = 0;
     int ypos = numRows;
     int edge_max = numRows;
-   // println("***********");
+    println("quality check ***********");
     for (int w = 0; w < data.length; w++){
       int[] v = data[w];
       int mx = v[0];
       int my = v[1];
       xpos = xpos + mx;
       ypos = ypos - my;
-    //  println(xpos + "," + ypos);
+      //println(xpos + "," + ypos);
       if ((xpos + ypos) > edge_max){
-      //  println("bad edge ");
+        println("bad edge");
         return null;
       }
     }
+    println("end quality check *****");
     return data;
 }
 
@@ -151,28 +164,39 @@ void keyTyped() {
   println("typed " + int(key) + " " + keyCode);
   if (int(key) == 32){
     // do one thing if it's a space bar
-    save("output.png");
-    flatten();
+    save("output/" + filename + "_" + num_iter + ".png");
+    flatten(true);
   } else {
-    // any other key, regen
-    for (int w = 1; w < numCols - 1; w++){
-      allData.set(w, generate());
+    // any other keystroke, regen
+    //reset the seed
+    randomSeed((long)abs(random(100000000.0f)));
+
+    float score = 0.0f;
+    while (score < 1.0f){
+      for (int w = 1; w < numCols - 1; w++){
+        allData.set(w, generate());
+      }
+      score = flatten(false);
+      println(score);
     }
   }
 
   
 }
 
-void flatten(){
+float flatten(boolean write){
   println("begin output");
   int edge = 2;
   int nwidth = (numCols + 2) * unit;
   int nheight = (numRows + 2) * unit;
-  PGraphics svg = createGraphics(nwidth, nheight, SVG, "output.svg");
-  svg.beginDraw();
+  PGraphics svg = null;
   
-  //border (maybe this should be optional)
-  svg.rect(unit, unit, numCols * unit, numRows * unit);
+  if (write){
+    svg = createGraphics(nwidth, nheight, SVG, "output/" + filename + "_" + num_iter + ".svg");
+    svg.beginDraw();
+    //border (maybe this should be optional)
+    svg.rect(unit, unit, numCols * unit, numRows * unit);
+  }  
   
   //just run the data backward, which makes it easier to compare the image and the cut sheet
   ArrayList<int[][]> flipList = new ArrayList<int[][]>();
@@ -180,7 +204,8 @@ void flatten(){
     flipList.add(allData.get(w));
   }
   
-  
+  int[] firstHorz = new int[flipList.size()];
+  int[] lastHorz = new int[flipList.size()];
   // now draw the horizontal lines,
   for (int rowCount = 0; rowCount < flipList.size(); rowCount++){
     int[][] data = flipList.get(rowCount);
@@ -195,13 +220,23 @@ void flatten(){
       } else {
         int xPos = ((rowCount + 1) * unit) + edge;
         int yPos = (w + 1) * unit;
-        svg.line(xPos, yPos, xPos + unit - (edge * 2), yPos);
+        if (write){
+          svg.line(xPos, yPos, xPos + unit - (edge * 2), yPos);
+        }
+        if (firstHorz[rowCount] == 0){
+          firstHorz[rowCount] = w;
+        }
+        lastHorz[rowCount] = w;
 //        println(xPos + "," + yPos + "," + (xPos + unit - (edge * 2)) + "," + yPos);        
       }
       prevX = x;
       prevY = y;
     }
   }
+  
+  int[] sharedScore = new int[flipList.size() - 1];
+    sharedScore[0] = 0;
+  
   
   // now draw the vertical lines, but first we have to asses the relation 
   // of each column to the one next to it
@@ -214,6 +249,7 @@ void flatten(){
     int[] n_data = new int[2];
       n_data[0] = next[0][0];
       n_data[1] = next[0][1];
+    int crossScore = 0;
     for (int w = 0; w < data.length; w++){
       int x = m_data[0] + data[w][0];
       int y = m_data[1] + data[w][1];
@@ -221,21 +257,50 @@ void flatten(){
       int b = n_data[1] + next[w][1];
       String p = (m_data[0] + "," + m_data[1] + " " + x + "," + y);
       String q = (n_data[0] + "," + n_data[1] + " " + a + "," + b);
-      println(rowCount + ":" + w + "\t" + p + "\t" + q);
+      //println("cutcount\t" + rowCount + ":" + w + "\t" + p + "\t" + q);
       if (!p.equals(q)){
-        println("cut");
         int xpos = (rowCount + 2) * unit;
         int ypos = (w + 1) * unit;
-        svg.line(xpos, ypos, xpos, ypos + unit);
+        if (write){
+          svg.line(xpos, ypos, xpos, ypos + unit);        
+        }
+      } else {
+        
+        if (rowCount > 0 && rowCount < (flipList.size() - 2)){  
+          if (w >= firstHorz[rowCount] && w < lastHorz[rowCount]){
+            crossScore++;
+          }
+        }
       }
       m_data[0] = x;
       m_data[1] = y;
       n_data[0] = a;
       n_data[1] = b;
     }
+    sharedScore[rowCount] = crossScore;
   }
+
+  int sharedCols = 0;
+  int sharedCells = 0;
+  int maxSharedCols = 0;
+  for (int w = 1; w < sharedScore.length - 1; w++){
+    int score = sharedScore[w];
+    if (score == 0){
+//      println("NO SHARED");
+    } else {
+      sharedCols++;
+    }
+    sharedCells = sharedCells + score;
+    maxSharedCols++;
+  }
+  println("connected cols " + sharedCols);
+  println("shared cells " + sharedCells);
     
+  if (write){
+    svg.endDraw();
+    println("completed output");
+  }
   
-  svg.endDraw();
-  println("completed output");
+  float connectedCols =  (float)(sharedCols)/(float)(maxSharedCols);
+  return connectedCols;
 }
