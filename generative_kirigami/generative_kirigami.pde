@@ -1,12 +1,13 @@
 import peasy.*;
 import processing.svg.*;
-
 PeasyCam cam;
 
 int unit = 10; // just display size for this
-int numCols = 8; // should be an even number
-int numRows = 10; //2X numcols, if you want a square
-ArrayList<int[][]> allData = new ArrayList<int[][]>();
+int numCols = 7; // should be an even number
+int numRows = 12; //2X numcols, if you want a square
+ArrayList<int[][]> allData;
+
+boolean invertFromMiddle = false;
 
 int mx = 0;
 int my = 0;
@@ -27,14 +28,45 @@ void setup(){
 
   float score = 0.0f;
   while (score < 0.1f){
-    allData.add(generateEdge());
-    for (int w = 1; w < numCols - 1; w++){
-      allData.add(generate());
-    }
-    allData.add(generateEdge());
+    generateFullModel();    
     score = flatten(false);
     print("generate: score " + score);
   }
+}
+
+void generateFullModel(){
+    allData = new ArrayList<int[][]>();
+      //put a safe edge in first pos
+    allData.add(generateEdge());
+    
+    if (!invertFromMiddle){
+      //ok, not trying to make it symmetrical - just make a new one every time
+      for (int w = 1; w < numCols - 1; w++){
+        allData.add(generate());
+      }
+    } else {
+      println("symm");
+      //ok we are trying to make it symmettrical.
+      ArrayList<Integer> pos = new ArrayList<Integer>(); 
+      int midpoint = numCols/2;
+      int oddeven = numCols % 2;
+      
+      for (int w = 1; w < midpoint + oddeven; w++){
+        allData.add(generate());
+        if (w < midpoint){
+          pos.add(w);
+        }
+      }      
+      for (int w = midpoint + oddeven; w < numCols - 1; w++){        
+        int[][] dd = allData.get(pos.get(pos.size() - 1));
+        pos.remove(pos.size() - 1);
+        allData.add(dd);
+        println(midpoint + ":" + oddeven + ":" + w);
+      }
+    }
+    
+    //put a safe edge in last pos
+    allData.add(generateEdge());
 }
 
 void draw(){
@@ -166,19 +198,15 @@ void keyTyped() {
     // do one thing if it's a space bar
     save("output/" + filename + "_" + num_iter + ".png");
     flatten(true);
+  } else if (int(key) == 105){
+    invertFromMiddle = !invertFromMiddle;
+    println("use invert/symmetry " + invertFromMiddle);
   } else {
     // any other keystroke, regen
     //reset the seed
     randomSeed((long)abs(random(100000000.0f)));
+    generateFullModel();
 
-    float score = 0.0f;
-    while (score < 1.0f){
-      for (int w = 1; w < numCols - 1; w++){
-        allData.set(w, generate());
-      }
-      score = flatten(false);
-      println(score);
-    }
   }
 
   
