@@ -3,11 +3,14 @@ import processing.svg.*;
 PeasyCam cam;
 
 int unit = 10; // just display size for this
-int numCols = 7; // should be an even number
-int numRows = 12; //2X numcols, if you want a square
+int numCols = 4; // should be an even number? doen't have to be to work...
+int numRows = 10; //2X numcols, if you want a square
 ArrayList<int[][]> allData;
+int edgeColumnDepth = 1; //this is the space on the sides
 
 boolean invertFromMiddle = false;
+boolean angleDrawing = false;
+boolean arcDrawing = false;
 
 int mx = 0;
 int my = 0;
@@ -16,7 +19,9 @@ int mz = 0;
 String filename = "output";
 int num_iter = 0;
 
-void setup(){
+float score_floor = 0.9f;
+
+void setup(){ 
   size(500,500, P3D);  
   
   cam = new PeasyCam(this, 300);
@@ -27,7 +32,7 @@ void setup(){
   cam.rotateX(0.38);
 
   float score = 0.0f;
-  while (score < 0.1f){
+  while (score < score_floor){
     generateFullModel();    
     score = flatten(false);
     print("generate: score " + score);
@@ -37,11 +42,13 @@ void setup(){
 void generateFullModel(){
     allData = new ArrayList<int[][]>();
       //put a safe edge in first pos
-    allData.add(generateEdge());
+    for (int w = 0; w < edgeColumnDepth; w++){
+      allData.add(generateEdge());
+    }
     
     if (!invertFromMiddle){
       //ok, not trying to make it symmetrical - just make a new one every time
-      for (int w = 1; w < numCols - 1; w++){
+      for (int w = edgeColumnDepth; w < numCols - edgeColumnDepth; w++){
         allData.add(generate());
       }
     } else {
@@ -51,13 +58,13 @@ void generateFullModel(){
       int midpoint = numCols/2;
       int oddeven = numCols % 2;
       
-      for (int w = 1; w < midpoint + oddeven; w++){
+      for (int w = edgeColumnDepth; w < midpoint + oddeven; w++){
         allData.add(generate());
         if (w < midpoint){
           pos.add(w);
         }
       }      
-      for (int w = midpoint + oddeven; w < numCols - 1; w++){        
+      for (int w = midpoint + oddeven; w < numCols - edgeColumnDepth; w++){        
         int[][] dd = allData.get(pos.get(pos.size() - 1));
         pos.remove(pos.size() - 1);
         allData.add(dd);
@@ -66,7 +73,9 @@ void generateFullModel(){
     }
     
     //put a safe edge in last pos
-    allData.add(generateEdge());
+    for (int w = 0; w < edgeColumnDepth; w++){
+      allData.add(generateEdge());
+    }
 }
 
 void draw(){
@@ -111,6 +120,15 @@ void drawTile(int tx, int ty, int tz){
 }
 
 int[][] generate(){
+  long rx = (long)abs(random(100000000.0f));
+  filename = "" + rx;
+  println("seed " + rx);
+  randomSeed(rx);
+  
+  numCols = int(random(3.0f, 12.0f));
+  numRows = numCols * 2;
+  println(numCols);
+  println(numRows);
   int[][] data = new int[numRows][2];
   data[0] = new int[]{0,1}; //first col is "blank"
   int numX = 0;
@@ -127,10 +145,6 @@ int[][] generate(){
       data[counter] = new int[]{1,0};
       numX++;
     } else {
-      long rx = (long)abs(random(100000000.0f));
-      filename = "" + rx;
-      println("seed " + rx);
-      randomSeed(rx);
       float r = abs(random(1.0f));
       if (r > 0.5f){
         data[counter] = new int[]{0,1};
@@ -205,7 +219,12 @@ void keyTyped() {
     // any other keystroke, regen
     //reset the seed
     randomSeed((long)abs(random(100000000.0f)));
-    generateFullModel();
+    float score = 0.0f;
+    while (score < score_floor){
+      generateFullModel();
+      score = flatten(false);
+      print("generate: score " + score);
+    }
 
   }
 
@@ -218,12 +237,15 @@ float flatten(boolean write){
   int nwidth = (numCols + 2) * unit;
   int nheight = (numRows + 2) * unit;
   PGraphics svg = null;
+  float leftXEdge = 10000000.0f;
   
   if (write){
-    svg = createGraphics(nwidth, nheight, SVG, "output/" + filename + "_" + num_iter + ".svg");
+    svg = createGraphics(nwidth * 2, nheight * 2, SVG, "output/" + filename + "_" + num_iter + ".svg");
     svg.beginDraw();
     //border (maybe this should be optional)
-    svg.rect(unit, unit, numCols * unit, numRows * unit);
+    if (!angleDrawing){
+      svg.rect(unit, unit, numCols * unit, numRows * unit);
+    }
   }  
   
   //just run the data backward, which makes it easier to compare the image and the cut sheet
@@ -239,6 +261,8 @@ float flatten(boolean write){
     int[][] data = flipList.get(rowCount);
     int prevX = 0;
     int prevY = 1;
+    
+    
     for (int w = 0; w < data.length; w++){
       int x = data[w][0];
       int y = data[w][1];
@@ -248,8 +272,12 @@ float flatten(boolean write){
       } else {
         int xPos = ((rowCount + 1) * unit) + edge;
         int yPos = (w + 1) * unit;
+        
         if (write){
-          svg.line(xPos, yPos, xPos + unit - (edge * 2), yPos);
+          float leftEdge = drawSvgLine(svg, xPos, yPos, xPos + unit - (edge * 2), yPos);
+          if (leftEdge < leftXEdge){
+            leftXEdge = leftEdge;
+          }
         }
         if (firstHorz[rowCount] == 0){
           firstHorz[rowCount] = w;
@@ -260,6 +288,7 @@ float flatten(boolean write){
       prevX = x;
       prevY = y;
     }
+    
   }
   
   int[] sharedScore = new int[flipList.size() - 1];
@@ -290,7 +319,7 @@ float flatten(boolean write){
         int xpos = (rowCount + 2) * unit;
         int ypos = (w + 1) * unit;
         if (write){
-          svg.line(xpos, ypos, xpos, ypos + unit);        
+          drawSvgLine(svg, xpos, ypos, xpos, ypos + unit);        
         }
       } else {
         
@@ -311,7 +340,7 @@ float flatten(boolean write){
   int sharedCols = 0;
   int sharedCells = 0;
   int maxSharedCols = 0;
-  for (int w = 1; w < sharedScore.length - 1; w++){
+  for (int w = edgeColumnDepth; w < sharedScore.length - edgeColumnDepth; w++){
     int score = sharedScore[w];
     if (score == 0){
 //      println("NO SHARED");
@@ -323,12 +352,35 @@ float flatten(boolean write){
   }
   println("connected cols " + sharedCols);
   println("shared cells " + sharedCells);
+  println("max shared cols " + maxSharedCols);
     
   if (write){
+    if (angleDrawing){
+      svg.noFill();
+      svg.rect(leftXEdge - 2, unit, numCols * unit, numRows * unit);
+    }
+
     svg.endDraw();
     println("completed output");
   }
   
   float connectedCols =  (float)(sharedCols)/(float)(maxSharedCols);
   return connectedCols;
+}
+
+float drawSvgLine(PGraphics svg, float x1, float y1, float x2, float y2){
+  if (angleDrawing){
+    float totalHeight = numRows * unit;
+    float startY = y1/totalHeight;
+    float endY = y2/totalHeight;
+    x1 = x1 + (((unit * edgeColumnDepth) * startY));
+    x2 = x2 + (((unit * edgeColumnDepth) * endY));
+  }
+  if (arcDrawing && (y1 != y2)){    
+    float a = unit/2;
+    svg.bezier(x1, y1, x1 + a, y1, x2 + a, y2, x2, y2); 
+  } else {
+    svg.line(x1, y1, x2, y2);
+  }
+  return x1;
 }
